@@ -1,0 +1,400 @@
+openapi: 3.0.3
+info:
+  title: Computop Paygate Boarding API - OpenAPI 3.0
+  description: |-
+    This is a descriptions of Computop's API to create and manage merchant accounts (MID) and payment their methods.
+
+    
+    Some useful links:
+    - [Computop Paygate](https://www.computop.com)
+    
+
+  termsOfService: http://www.computop.com
+  contact:
+    email: helpdesk@computop.com
+  version: 1.0.1
+externalDocs:
+  description: Find out more about Computop
+  url: http://www.computop.com
+servers:
+  - url: https://openapi.computop-paygate.com/boarding/v2
+
+tags:
+
+  - name: account
+    description: An account is a company. Each account can handle several merchants.
+    
+  - name: merchant
+    description: Each merchant is identified by an unique merchant id (MID) which is associated to exactly one account. Each MID can have several payment methods (paytype)
+
+  - name: paytype
+    description: A paytype is a specific payment method.
+  
+
+
+paths:
+  /account:
+    put:
+      tags:
+        - account
+      summary: Creates a new account
+      description: Creates a new account
+      operationId: addAccount
+      requestBody:
+        description: Creates a new account
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Account'
+            examples: 
+              "createAccount":
+                  $ref: '#/components/examples/createAccount'
+              "createAccountWithoutMerchant":
+                  $ref: '#/components/examples/createAccountWithoutMerchant'
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '405':
+          description: Invalid input exception
+
+
+      security:
+        - petstore_auth:
+            - write:pets
+            - read:pets
+
+
+  /account/{accountId}:
+
+    get:
+      tags:
+        - account
+      summary: Gets an account
+      description: Provides a specific account referenced by accountId
+      operationId: getAccount
+      parameters:
+        - name: accountId
+          in: path
+          description: ID of an account
+          required: true
+          schema:
+            type: string
+            minLength: 10
+            maxLength: 10
+            example: "0000321633"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          description: Not found
+          
+    patch:
+      tags:
+        - account
+      summary: Updates an existing account
+      description: Updates an existing account
+      operationId: updateAccount
+      parameters:
+        - name: accountId
+          in: path
+          description: ID of account to update
+          required: true
+          schema:
+            type: string
+            minLength: 10
+            maxLength: 10
+            example: "0000321633"
+      requestBody:
+        description: Updates an existing account
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Account'
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '405':
+          description: Invalid input exception
+
+  /merchant/{accountId}:
+    put:
+      tags:
+        - merchant
+      summary: Creates a new merchant 
+      description: Creates a new merchant
+      operationId: createMerchant
+      parameters:
+        - name: accountId
+          in: path
+          description: ID of an account
+          required: true
+          schema:
+            type: string
+            minLength: 10
+            maxLength: 10
+            example: "0000321633"
+      requestBody:
+        description: Adds a new merchant to  an existing account
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Merchant'
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Merchant'
+        '404':
+          description: Not found
+        '405':
+          description: Invalid input exception
+
+      security:
+        - petstore_auth:
+            - write:pets
+            - read:pets
+
+
+
+
+components:
+
+  schemas:
+
+    Account:
+      required:
+        - name
+      type: object
+      properties:
+        id:
+          description: ID of a newly created account. # k_sap_customerid_c
+          type: string
+          minLength: 10
+          maxLength: 10
+          example: "0000321633"
+        name:
+          description: Companie's name
+          type: string
+          maxLength: 40
+          example: My companie's name
+        name2:
+          type: string
+          maxLength: 40
+          example: My companie's name is longer than 40 char
+        contacts:
+          type: array
+          $ref: '#/components/schemas/Contact'
+        merchants:
+          type: array
+          $ref: '#/components/schemas/Merchant'
+
+
+
+    Merchant:
+      type: object
+      properties:
+        mid:
+          type: string
+          maxLength: 30
+          example: MyMerchantID
+        name:
+          type: string
+          maxLength: 128
+          example: My merchant's name
+        paytypes:
+          type: array
+          $ref: '#/components/schemas/paytype'
+        posSettings:
+          type: object
+          $ref: '#/components/schemas/posSettings'
+      discriminator:
+          propertyName: paytypes
+          mapping:
+            paytypeCC: '#/components/schemas/paytypeCC'
+            paytypePaypal: '#/components/schemas/paytypePaypal'
+
+    Contact:
+      type: object
+      properties:
+        firstName:
+          type: string
+          maxLength: 128
+          example: Contact first name
+        lastName:
+          type: string
+          maxLength: 128
+          example: Contact family name
+
+    paytype:
+      type: string
+      enum:
+        - paytypeCC
+        - paytypePaypal
+
+
+    paytypeCC:
+      type: object
+      properties:
+        priority:
+          type: number
+          description: Specifies the priority of a paytype within its category
+        brands:
+          type: array
+          $ref: '#/components/schemas/brand'
+          description: Contains the respective brands and their settings for payment processing
+        
+    paytypePaypal:
+      type: object
+      properties:
+        priority:
+          type: number
+          description: Specifies the priority of a paytype within its category
+
+    posSettings:
+      required:
+        - posActive
+      type: object
+      properties:
+        posActive:
+          type: boolean
+          description: Defines the activation of the POS processing for the given merchant
+        posAddServices:
+          type: boolean
+          description: Activates additional services for POS processing
+        s2sNotifyUrl:
+          type: string
+          description: The respective Merchant URL where the POS notifications will be send 
+        realTimeNotify:
+          type: boolean
+          description: Notification is send in real time if active
+        notifyRetries:
+          type: boolean
+          description: If true the Retry logic is activates in case of no response from the recipient host. If false no retry logic is in place
+        expiryDateCheck:
+          type: boolean
+          description: If true the Expiry date of the POS transaction is not checked by Paygate. If false the expiry date is checked and an error is thrown if the card has expired
+
+
+    brand:
+      required:
+        - name
+        - terminalConfig
+      type: object
+      properties:
+        name:
+          type: string
+        terminalConfig:
+          type: object
+          $ref: '#/components/schemas/terminalConfig'
+          description: Defines the Acquirer TID and contract ID pairs that are used during transaction processing
+
+
+
+    terminalConfig:
+      required:
+        - currency
+        - contractId
+      type: object
+      properties:
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 5
+          description: ISO 4217 A3 currency code or "MULTI"
+        contractId:
+          type: string
+          description: Is assigned by the acquirer (also known as VU or VP number)
+        locationId:
+          type: string
+          description: For POS this represents the value that identify uniquely the terminal location
+
+
+  examples:
+
+    createAccount:
+      value: {
+        "name": "My companie's name",
+        "name2": "companie's name is longer than 40 char",
+        "merchants": [
+          {
+            "mid": "MyMerchantID",
+            "name": "My merchant's name"
+          },
+          {
+            "mid": "AnotherMerchantID",
+            "name": "My 2nd merchant's name"
+          }
+        ],
+        "contacts": [
+          {
+            "firstName": "Contact first name",
+            "lastName": "Contact family name"
+          },
+          {
+            "firstName": "Another ontact first name",
+            "lastName": "Another ontact family name"
+          }
+        ]
+      }
+      summary: 
+      description: 
+        
+    createAccountWithoutMerchant:
+      value: {
+        "name": "My companie's name",
+        "name2": "companie's name is longer than 40 char",
+        "contacts": [
+          {
+            "firstName": "Contact first name",
+            "lastName": "Contact family name"
+          },
+          {
+            "firstName": "Another ontact first name",
+            "lastName": "Another ontact family name"
+          }
+        ]
+      }
+      summary: 
+      description: 
+
+
+    createMerchant:
+      value: {
+        "mid": "MyMerchantID",
+        "name": "My merchant's name"
+      }
+      summary: 
+      description: 
+
+
+
+  securitySchemes:
+    petstore_auth:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: https://petstore3.swagger.io/oauth/authorize
+          scopes:
+            write:pets: modify pets in your account
+            read:pets: read your pets
+    api_key:
+      type: apiKey
+      name: api_key
+      in: header
