@@ -2,9 +2,41 @@ openapi: 3.0.3
 info:
   title: Computop Paygate Boarding API - OpenAPI 3.0
   description: |-
-    This is a descriptions of Computop's API to create and manage merchant accounts (MID) and payment their methods.
-
+    This is a descriptions of Computop's API to create and manage merchant accounts (MID) and their payment  methods.
     
+    Each merchant belongs to a certain company (account). Each merchant must be assigned to one account. If the account does not exist, you have to create one.
+    
+    Each merchant can have several paytypes. Those paytypes can be ECOM or POS related. If a paytype is POS related you need to add POS settings and POS terminals. Each terminal requires a physical device. The link between a device and a terminal will be done via the posTerminalId and the serialNumber of the device. If you order a device via this API this link will be already done automatically. If you order a device via another channel you have to link the device with the terminal via this API. 
+    
+    
+    
+    **use cases**
+    1. create a new company (account)
+       ````
+         POST /account
+       ````
+    2. create a new merchant
+       ````
+         POST /{account_id}/merchant
+       ````
+    3. activate/deactivate a merchant
+       ````
+         PATCH /merchant/{mid}
+       ````
+    4. order a terminal
+       ````
+         POST /device/order
+       ````
+    5. add a previously ordered terminal
+       ````
+         POST /device
+       ````
+    6. activate/deactivate a terminal
+       ````
+         PATCH /{posTerminalId}
+       ````
+
+
     Some useful links:
     - [Computop Paygate](https://www.computop.com)
     
@@ -12,7 +44,7 @@ info:
   termsOfService: http://www.computop.com
   contact:
     email: helpdesk@computop.com
-  version: 1.0.1
+  version: 0.0.1
 externalDocs:
   description: Find out more about Computop
   url: http://www.computop.com
@@ -25,10 +57,15 @@ tags:
     description: An account is a company. Each account can handle several merchants.
     
   - name: merchant
-    description: Each merchant is identified by an unique merchant id (MID) which is associated to exactly one account. Each MID can have several payment methods (paytype)
+    description: Each merchant is identified by an unique merchant id (MID) which is associated to exactly one account. Each MID can have several payment methods (paytype).
+        
+  - name: terminal
+    description: A terminal is a general representation of a specific terminal/device. A terminal holds all non device specific parameters. All device specific parameters are configured at device. A terminal is linked with a specific device via terminal.posTerminalId and device.serialNumber.
+    
+  - name: device
+    description: A device is a physical terminal.
 
 
-  
 
 
 paths:
@@ -40,17 +77,7 @@ paths:
       description: Creates a new account
       operationId: addAccount
       requestBody:
-        description: Creates a new account
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Account'
-            examples: 
-              "createAccount":
-                  $ref: '#/components/examples/createAccount'
-              "createAccountWithoutMerchant":
-                  $ref: '#/components/examples/createAccountWithoutMerchant'
-        required: true
+        $ref: '#/components/requestBodies/createAccountRequest'
       responses:
         '200':
           description: Successful operation
@@ -62,11 +89,6 @@ paths:
           description: Invalid input exception
 
 
-      security:
-        - petstore_auth:
-            - write:pets
-            - read:pets
-
 
   /account/{accountId}:
 
@@ -77,18 +99,10 @@ paths:
       description: Provides a specific account referenced by accountId
       operationId: getAccount
       parameters:
-        - name: accountId
-          in: path
-          description: ID of an account
-          required: true
-          schema:
-            type: string
-            minLength: 10
-            maxLength: 10
-            example: "0000321633"
+        - $ref: '#/components/parameters/accountId'
       responses:
         '200':
-          description: OK
+          description: Successful operation
           content:
             application/json:
               schema:
@@ -103,22 +117,9 @@ paths:
       description: Updates an existing account
       operationId: updateAccount
       parameters:
-        - name: accountId
-          in: path
-          description: ID of account to update
-          required: true
-          schema:
-            type: string
-            minLength: 10
-            maxLength: 10
-            example: "0000321633"
+        - $ref: '#/components/parameters/accountId'
       requestBody:
-        description: Updates an existing account
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Account'
-        required: true
+        $ref: '#/components/requestBodies/updateAccountRequest'
       responses:
         '200':
           description: Successful operation
@@ -129,31 +130,17 @@ paths:
         '400':
           description: Invalid input exception
 
-  /merchant:
+  /{accountId}/merchant:
     post:
       tags:
         - merchant
       summary: Creates a new merchant 
-      description: Creates a new merchant
+      description: Creates a new merchant. If a merchant uses a POS terminal, some POS specific settings are required (posSettings).
       operationId: createMerchant
+      parameters:
+        - $ref: '#/components/parameters/accountId'
       requestBody:
-        description: Adds a new merchant to  an existing account
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/Merchant'
-            examples: 
-              "createMerchantWithoutPaytype":
-                  $ref: '#/components/examples/createMerchantWithoutPaytype'
-              "createMerchantWithPaypal":
-                  $ref: '#/components/examples/createMerchantWithPaypal'
-              "createMerchantWithCC":
-                  $ref: '#/components/examples/createMerchantWithCC'
-              "createMerchantWithPaypalAndCC":
-                  $ref: '#/components/examples/createMerchantWithPaypalAndCC'
-        required: true
+        $ref: '#/components/requestBodies/createMerchantRequest'
       responses:
         '200':
           description: Successful operation
@@ -165,8 +152,28 @@ paths:
           description: Invalid input exception
         '404':
           description: Not found
-    
+
+
   /merchant/{mid}:
+
+    get:
+      tags:
+        - merchant
+      summary: Gets a specific merchant
+      description: Provides a specific merchant referenced by mid
+      operationId: getMerchant
+      parameters:
+        - $ref: '#/components/parameters/mid'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Merchant'
+        '404':
+          description: Not found
+
     patch:
       tags:
         - merchant
@@ -174,19 +181,9 @@ paths:
       description: ""
       operationId: updateMerchant
       parameters:
-        - name: mid
-          in: path
-          description: MID of merchant which should be updated
-          required: true
-          schema:
-            $ref: '#/components/schemas/mid'
+        - $ref: '#/components/parameters/mid'
       requestBody:
-        description: Updates a existing merchant
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Merchant'
-        required: true
+        $ref: '#/components/requestBodies/updateMerchantRequest'
       responses:
         '200':
           description: Successful operation
@@ -208,14 +205,9 @@ paths:
       description: ""
       operationId: addPaytype
       parameters:
-        - name: mid
-          in: path
-          description: MID of merchant which should be updated
-          required: true
-          schema:
-            $ref: '#/components/schemas/mid'
+        - $ref: '#/components/parameters/mid'
       requestBody:
-        description: Adds a new  paytype
+        description: Adds a new paytype
         content:
           application/json:
             schema:
@@ -242,25 +234,10 @@ paths:
       description: ""
       operationId: updatePaytype
       parameters:
-        - name: mid
-          in: path
-          description: MID of merchant which should be updated
-          required: true
-          schema:
-            $ref: '#/components/schemas/mid'
-        - name: paytype
-          in: path
-          description: Paytype name.
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/mid'
+        - $ref: '#/components/parameters/paytypeName'
       requestBody:
-        description: Updates a existing paytype
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/paytype'
-        required: true
+        $ref: '#/components/requestBodies/updatePaytypeRequest'
       responses:
         '200':
           description: Successful operation
@@ -274,61 +251,568 @@ paths:
           description: Not found
 
 
+  /merchant/{mid}/terminal:
+    post:
+      tags:
+        - terminal
+      summary: "Adds a new terminal at a certain merchant"
+      description: ""
+      operationId: addTerminal
+      parameters:
+        - $ref: '#/components/parameters/mid'
+      requestBody:
+        $ref: '#/components/requestBodies/createPosTerminalRequest'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/posTerminal'
+        '400':
+          description: Invalid input exception
+        '404':
+          description: Not found
+
+
+  /{posTerminalId}:
+
+    get:
+      tags:
+        - terminal
+      summary: Gets a specific terminal
+      description: Provides a specific terminal referenced by posTerminalId
+      operationId: getTerminal
+      parameters:
+        - $ref: '#/components/parameters/posTerminalId'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/posTerminal'
+        '404':
+          description: Not found
+
+    patch:
+      tags:
+        - terminal
+      summary: "Updates a terminal"
+      description: ""
+      operationId: updateTerminal
+      parameters:
+        - $ref: '#/components/parameters/posTerminalId'
+      requestBody:
+        $ref: '#/components/requestBodies/updatePosTerminalRequest'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/posTerminal'
+        '400':
+          description: Invalid input exception
+        '404':
+          description: Not found
+
+
+  /device/order:
+    post:
+      tags:
+        - device
+      summary: Initiates an order of a new device/terminal. Order process will be initiated. When the  device has been delivered it will be automatically created in Paygate. A separate call to create device is not necessary.
+      description: ""
+      operationId: orderDevice
+      requestBody:
+        $ref: '#/components/requestBodies/orderDeviceRequest'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/device'
+        '400':
+          description: Invalid input exception
+      
+  /device:
+    post:
+      tags:
+        - device
+      summary: Creates a new device/terminal which has not been ordered via Paygate.  If the device has been ordered via POST /device/order it is not necessary to create the device afterwards in Paygate. 
+      requestBody:
+        $ref: '#/components/requestBodies/createDeviceRequest'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/device'
+        '400':
+          description: Invalid input exception
+        '409':
+          description: Already exists.
+
+          
+  /device/{serialNumber}/:
+
+    get:
+      tags:
+        - device
+      summary: Gets a specific device
+      description: Provides a specific device referenced by serialNumber
+      operationId: getDevice
+      parameters:
+        - $ref: '#/components/parameters/serialNumber'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/device'
+        '404':
+          description: Not found
+
+    patch:
+      tags:
+        - device
+      summary: Updates a previously created device.
+      description: ""
+      operationId: updateDevice
+      parameters:
+        - $ref: '#/components/parameters/serialNumber'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/device'
+        '400':
+          description: Invalid input exception
+        '404':
+          description: Not found
+
+      
+  /device/{serialNumber}/:link:
+    patch:
+      tags:
+        - device
+      summary: Links a device to a certain terminal id. A device is already linked to a terminal id when the device has been ordered or created. With this call you can change this link.
+      description: ""
+      operationId: linkDevice
+      parameters:
+        - $ref: '#/components/parameters/serialNumber'
+        - $ref: '#/components/parameters/posTerminalId'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/serialNumberToPosTerminalId'
+        '400':
+          description: Invalid input exception
+        '404':
+          description: Not found
+      
+      
+  /device/:link:
+    patch:
+      tags:
+        - device
+      summary: Links a list of devices to a list of terminal ids.
+      description: ""
+      operationId: linkDevices
+      requestBody:
+        description: Submit a list of all serial numbers and all terminal ids.
+        content:
+          applicatzion/json:
+            schema:
+              $ref: '#/components/schemas/serialNumberToPosTerminalIds'
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/serialNumberToPosTerminalIds'
+        '400':
+          description: Invalid input exception
+        '404':
+          description: Not found
+      
+     
 
 
 components:
 
+  requestBodies:
+
+    orderDeviceRequest:
+      description: Submit all data which are necessary to order a new device.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/orderDeviceRequest"
+          examples:
+            "order a specific device with with terminal id":
+              $ref: "#/components/examples/orderDeviceRequest"
+      required: true
+
+
+    createDeviceRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/createDeviceRequest"
+          examples:
+            "creates a device with S/N and link it with terminal id":
+              $ref: "#/components/examples/createDeviceRequest"
+      required: true
+
+
+    createAccountRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/createAccountRequest"
+          examples:
+            "creates an account":
+              $ref: "#/components/examples/createAccountRequest"
+      required: true
+
+    updateAccountRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/updateAccountRequest"
+          examples:
+            "updates an account":
+              $ref: "#/components/examples/updateAccountRequest"
+      required: true
+
+
+    createMerchantRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/createMerchantRequest"
+          examples:
+            "creates a merchants":
+              $ref: "#/components/examples/createMerchantRequest"
+      required: true
+
+    updateMerchantRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/updateMerchantRequest"
+          examples:
+            "updates a merchants":
+              $ref: "#/components/examples/updateMerchantRequest"
+            "activates a merchants":
+              $ref: "#/components/examples/activateMerchant"
+      required: true
+
+
+    updatePaytypeRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/updatePaytypeRequest"
+          examples:
+            "updates a paytype":
+              $ref: "#/components/examples/updatePaytypeRequest"
+      required: true
+
+
+    createPosTerminalRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/createPosTerminalRequest"
+          examples:
+            "creates a POS terminal":
+              $ref: "#/components/examples/createPosTerminalRequest"
+      required: true
+
+
+    updatePosTerminalRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/updatePosTerminalRequest"
+          examples:
+            "update a POS terminal":
+              $ref: "#/components/examples/updatePosTerminalRequest"
+            "activate a POS terminal":
+              $ref: "#/components/examples/activatePosTerminalRequest"
+      required: true
+
+
+
+
+
   schemas:
 
-    mid:
-      type: string
-      minLength: 3
-      maxLength: 128
-      
+    serialNumberToPosTerminalIds:
+      type: array
+      items:
+        $ref: '#/components/schemas/serialNumberToPosTerminalId'
 
-    Account:
-      required:
-        - name
+    
+    serialNumberToPosTerminalId:
       type: object
       properties:
-        id:
-          description: ID of a newly created account. # k_sap_customerid_c
-          type: string
-          minLength: 10
-          maxLength: 10
-          example: "0000321633"
+        serialNumber:
+          $ref: '#/components/schemas/serialNumber'
+        posTerminalId:
+          $ref: '#/components/schemas/posTerminalId'
+
+
+    device:
+      type: object
+      properties:
+        terminalType:
+          $ref: '#/components/schemas/terminalType'
+        serialNumber:
+          $ref: '#/components/schemas/serialNumber'
+        posTerminalId:
+          $ref: '#/components/schemas/posTerminalId'
+        
+
+    orderDeviceRequest:
+      type: object
+      properties:
+        terminalType:
+          $ref: '#/components/schemas/terminalType'
+        posTerminalId:
+          $ref: '#/components/schemas/posTerminalId'
+
+
+
+    createDeviceRequest:
+      type: object
+      properties:
+        terminalType:
+          $ref: '#/components/schemas/terminalType'
+        serialNumber:
+          $ref: '#/components/schemas/serialNumber'
+        posTerminalId:
+          $ref: '#/components/schemas/posTerminalId'
+
+  
+    terminalType:
+      type: string
+      enum: ["CCV A920", "CCV Fly Next", "CCV Pad", "CCV Pad Next", "CCV Base Next", "CCV Mobile Premium", "CCV Fly", "CCV Base", "CCV Pad contactles", "PayTec"]
+
+
+
+    posTerminalId:
+      type: string
+      example: "50856729"
+
+
+    createAccountRequest:
+      required:
+        - name
+        - website
+        - VAT
+        - languageCompany
+        - streetCompany
+        - cityCompany
+        - stateCompany
+        - zipCompany
+        - countryCompany
+      type: object
+      properties:
         name:
-          description: Companie's name
           type: string
           maxLength: 40
-          example: My companie's name
         name2:
           type: string
           maxLength: 40
-          example: My companie's name is longer than 40 char
+        website:
+          type: string
+          maxLength: 255
+        industryType:
+          type: string
+          enum: ["Travel", "Entertainment", "Retail", "Organisations", "Services", "Financial Institutions"]
+        VAT:
+          type: string
+        industryDetails:
+          type: string
+          enum: [""]
+        language:
+          type: string
+          enum: [""]
+        street:
+          type: string
+          maxLength: 255
+        street2:
+          type: string
+          maxLength: 255
+        city:
+          type: string
+          maxLength: 100
+        state:
+          type: string
+          maxLength: 255
+        zip:
+          type: string
+          maxLength: 20
+        country:
+          type: string
+          maxLength: 255
         contacts:
           type: array
           items:
             $ref: '#/components/schemas/Contact'
-        merchants:
+          example: [
+                {
+                  "firstName": "Contact first name",
+                  "lastName": "Contact family name"
+                },
+                {
+                  "firstName": "Contact first name",
+                  "lastName": "Contact family name"
+                }
+              ]
+
+
+
+    Account:
+      allOf:
+        - type: object
+          required: 
+            - id
+          properties:
+            id:
+              # k_sap_customerid_c
+              type: string
+              minLength: 10
+              maxLength: 10
+              example: "0123456789"
+        - $ref: '#/components/schemas/createAccountRequest'
+
+
+
+    updateAccountRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 40
+        name2:
+          type: string
+          maxLength: 40
+        website:
+          type: string
+          maxLength: 255
+        industryType:
+          type: string
+          enum: ["Travel", "Entertainment", "Retail", "Organisations", "Services", "Financial Institutions"]
+        VAT:
+          type: string
+        industryDetails:
+          type: string
+          enum: [""]
+        language:
+          type: string
+          enum: [""]
+        street:
+          type: string
+          maxLength: 255
+        street2:
+          type: string
+          maxLength: 255
+        city:
+          type: string
+          maxLength: 100
+        state:
+          type: string
+          maxLength: 255
+        zip:
+          type: string
+          maxLength: 20
+        country:
+          type: string
+          maxLength: 255
+
+
+    createMerchantRequest:
+      type: object
+      required:
+        - mid
+        - name
+      properties:
+        mid:
+          $ref: '#/components/parameters/mid'
+        active:
+          type: boolean
+          default: false
+        name:
+          type: string
+          maxLength: 128
+        posSettings:
+          $ref: '#/components/schemas/posSettings'
+
+
+    updateMerchantRequest:
+      type: object
+      properties:
+        active:
+          type: boolean
+          default: false
+        name:
+          type: string
+          maxLength: 128
+        posSettings:
+          $ref: '#/components/schemas/posSettings'
+
+
+    updatePaytypeRequest:
+      type: object
+      properties:
+        priority:
+          type: number
+          example: 1
+      oneOf: 
+        - $ref: '#/components/schemas/updatePaytypeCCRequest'
+        - $ref: '#/components/schemas/updatePaytypePaypalRequest'
+
+
+    updatePaytypeCCRequest:
+      type: object
+      properties:
+        brands:
+          description: Contains the respective brands and their settings for payment processing
           type: array
           items:
-            $ref: '#/components/schemas/Merchant'
+            $ref: '#/components/schemas/brand'
 
+
+    updatePaytypePaypalRequest:
+      type: object
+#     properties:
+#        tbd
 
 
     Merchant:
       type: object
       properties:
         account:
-          type: string
-          minLength: 10
-          maxLength: 10
-          example: "0000321633"
+          $ref: '#/components/schemas/accountId'
         mid:
-          type: string
-          maxLength: 30
-          example: MyMerchantID
+          $ref: '#/components/parameters/mid'
+        active:
+          type: boolean
         name:
           type: string
           maxLength: 128
@@ -339,11 +823,10 @@ components:
             $ref: '#/components/schemas/paytype'
         posSettings:
           $ref: '#/components/schemas/posSettings'
-      discriminator:
-          propertyName: paytypes
-          mapping:
-            paytypeCC: '#/components/schemas/paytypeCC'
-            paytypePaypal: '#/components/schemas/paytypePaypal'
+        posTerminals:
+          type: array
+          items:
+            $ref: '#/components/schemas/posTerminal'
 
 
     Contact:
@@ -358,81 +841,87 @@ components:
           maxLength: 128
           example: Contact family name
 
+
     paytype:
-      type: string
-      enum:
-        - paytypeCC
-        - paytypePaypal
+      required:
+        - paytypeName
+        - priority
+      type: object
+      properties:
+        paytypeName:
+          $ref: '#/components/schemas/paytypeName'
+        priority:
+          description: Specifies the priority of a paytype within its category
+          type: number
+          example: 1
+      oneOf: 
+        - $ref: '#/components/schemas/paytypeCC'
+        - $ref: '#/components/schemas/paytypePaypal'
+
 
 
     paytypeCC:
-      required:
-        - name
-        - priority
+      description: tbd
       allOf: 
         - $ref: '#/components/schemas/paytype'
-        - type: object
-          properties:
-            name:
-              type: string
-              enum: ["CC"]
-            priority:
-              type: number
-              description: Specifies the priority of a paytype within its category
-            brands:
-              type: array
-              items:
-                $ref: '#/components/schemas/brand'
-              description: Contains the respective brands and their settings for payment processing
+      type: object
+      properties:
+        brands:
+          description: Contains the respective brands and their settings for payment processing
+          type: array
+          items:
+            $ref: '#/components/schemas/brand'
+
         
     paytypePaypal:
-      required:
-        - name
-        - priority
+      description: tbd
       allOf: 
         - $ref: '#/components/schemas/paytype'
-        - type: object
-          properties:
-            name:
-              type: string
-              enum: ["Paypal"]
-            priority:
-              type: number
-              description: Specifies the priority of a paytype within its category
+      type: object
+#     properties:
+#       tbd
 
     posSettings:
-      required:
-        - posActive
+      description: Object containing all the setting required to process payments with a POS MerchantID.
       type: object
       properties:
         posActive:
-          type: boolean
           description: Defines the activation of the POS processing for the given merchant
+          type: boolean
+          default: false
+          example: true
         posAddServices:
-          type: boolean
           description: Activates additional services for POS processing
+          type: boolean
+          example: false
         s2sNotifyUrl:
-          type: string
           description: The respective Merchant URL where the POS notifications will be send 
+          type: string
         realTimeNotify:
-          type: boolean
           description: Notification is send in real time if active
+          type: boolean
+          example: false
         notifyRetries:
+          description: If "true" the retry logic is activates in case of no response from the recipient host. If "false" no retry logic is in place
           type: boolean
-          description: If true the Retry logic is activates in case of no response from the recipient host. If false no retry logic is in place
+          example: false
         expiryDateCheck:
+          description: If "true" the Expiry date of the POS transaction is not checked by Paygate. If "false" the expiry date is checked and an error is thrown if the card has expired
           type: boolean
-          description: If true the Expiry date of the POS transaction is not checked by Paygate. If false the expiry date is checked and an error is thrown if the card has expired
+          example: false
 
 
     brand:
+      description: tbd
       required:
-        - name
+        - brand
         - terminalConfig
       type: object
       properties:
-        name:
+        brand:
+          description: tbd
           type: string
+          enum: ["VISA", "MasterCard", "Maestro", "Diners", "JCB", "CUP"]
         terminalConfig:
           $ref: '#/components/schemas/terminalConfig'
           
@@ -440,138 +929,311 @@ components:
 
 
     terminalConfig:
+      description: Defines the Acquirer TID and contract ID pairs that are used during transaction processing
       required:
         - currency
         - contractId
       type: object
       properties:
         currency:
+          description: ISO 4217 A3 currency code or "MULTI"
           type: string
           minLength: 3
           maxLength: 5
-          description: ISO 4217 A3 currency code or "MULTI"
         contractId:
-          type: string
           description: Is assigned by the acquirer (also known as VU or VP number)
-        locationId:
           type: string
+        locationId:
           description: For POS this represents the value that identify uniquely the terminal location
-      description: Defines the Acquirer TID and contract ID pairs that are used during transaction processing
+          type: string
+
+    posTerminal:
+      description: tbd
+      type: object
+      properties:
+        active:
+          description: If "true" POS TerminalID is activated. If "false" POS TerminalID is not activated.
+          type: boolean
+        posTerminalId:
+          $ref: '#/components/schemas/posTerminalId'
+        prefix:
+          $ref: '#/components/schemas/posTerminalPrefix'
+        posData:
+          $ref: '#/components/schemas/posData'
+        creationTimestamp:
+          description: Timestamp of creation
+          type: string
+          format: date-time
+
+
+    posTerminalPrefix:
+      description: Defines the type of terminal
+                    200 (Credit Card Only)
+                    301 (non-EU Girocard)
+                    403 (EU Girocard)
+                    508 (Germany Girocard)
+      type: string
+      enum: ["200", "301", "403", "508"]
+      example: "200"
+
+
+    createPosTerminalRequest:
+      required:
+        - prefix
+        - posData
+      type: object
+      properties:
+        prefix:
+          $ref: '#/components/schemas/posTerminalPrefix'
+        posData:
+          $ref: '#/components/schemas/posData'
+
+
+    updatePosTerminalRequest:
+      type: object
+      properties:
+        active:
+          type: boolean
+        prefix:
+          $ref: '#/components/schemas/posTerminalPrefix'
+        posData:
+          $ref: '#/components/schemas/posData'
+
+
+    activatePosTerminal:
+      description: ""
+      required:
+        - active
+      type: object
+      properties:
+        active:
+          description: If "true" POS TerminalID is activated/ If "false" POS TerminalID is not activated.
+          type: boolean
+
+
+    posData:
+      description: Contains additional data required during POS Terminal ID set up on the POS personalization Server via Online API.
+        If not provided the POS TerminalID will be set up only at Paygate and subsequent offline tasks have to be conducted to complete the full set up of POSTIDs.
+      required:
+        - booking
+        - model
+        - language
+        - scMenu
+        - merchantName
+        - dcPos3.0
+        - CAT
+      type: object
+      properties:
+        booking:
+          description: If "true" device is set for production processing. If "false" device is set for test processing
+          type: boolean
+        model:
+          description: tbd
+          type: string
+          enum: ["CCV Fly", "CCV Pad", "CCV Mobile Premium", "CCV Base", "CCV A 920", "CCV Pad Next", "CCV Fly Next", "CCV Base Next", "CCV A77", "PayTec Castles V3C"]
+        language:
+          description: tbd
+          type: string
+          enum: ["bg", "da", "de", "en", "et", "fi", "fr", "el", "ga", "it", "hr", "lv", "lt", "mt", "nl", "pl", "pt", "ro", "sv", "sk", "sl", "es", "cs", "hu"]
+        scMenu:
+          description: tbd
+          type: string
+          enum: ["Payment", "PaymentwithReference", "FirstReservationwithReference"]
+        merchantName:
+          description: Merchant/Store name
+          type: string
+        dcPos3.0:
+          description:  If "true" device supports DC POS 3.0 configuration. If "false" device do not supprot DC POS 3.0.
+          type: boolean
+        CAT:
+          description: 0 - NO, 1 - YES, with trigger, 2 - YES without trigger
+          type: number
+          enum: [0, 1, 2]
+        idleScreenLogoId:
+          description: Please check with Supprot team for the required logo ID value.
+          type: number
+          
+
+    accountId:      
+      description: ID of an account
+      type: string
+      minLength: 10
+      maxLength: 10
+      example: "0000321633"
+    
+
+    mid:      
+      description: ID of an account
+      type: string
+      maxLength: 30
+      example: "MyMerchantID"
+    
+
+    paytypeName:      
+      description: Name of an paytype
+      type: string
+      maxLength: 30
+      enum: ["CC", "Paypal"]
+      example: "CC"
+    
+
+    serialNumber:
+      description: Serial number of a physical terminal/device
+      type: string
+      maxLength: 30
+      example: "367H65F9"
+    
+          
+            
+  parameters:
+    accountId:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/accountId'
+
+    mid:
+      name: mid
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/mid'
+
+    paytypeName:
+      name: paytype
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/paytypeName'
+
+    posTerminalId:
+      name: posTerminalId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/posTerminalId'
+
+    serialNumber:
+      name: serialNumber
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/serialNumber'
+
+
 
   examples:
-
-    createAccount:
+  
+    orderDeviceRequest:
       value: {
-        "name": "My companie's name",
-        "name2": "companie's name is longer than 40 char",
-        "merchants": [
-          {
-            "mid": "MyMerchantID",
-            "name": "My merchant's name"
-          },
-          {
-            "mid": "AnotherMerchantID",
-            "name": "My 2nd merchant's name"
-          }
-        ],
+        "terminalType": "CCV Fly Next",
+        "posTerminalId": "12345678"
+      }
+    
+    createDeviceRequest:
+      value: {
+        "terminalType": "CCV Fly Next",
+        "serialNumber": "123456789",
+        "posTerminalId": "12345678"
+      }
+    
+
+    createAccountRequest:
+      value: {
+        "name": "My company's name",
+        "website": "www.company.com",
+        "VAT": "4711",
+        "language": "D",
+        "street": "Main Street 12",
+        "city": "Down Town",
+        "state": "HH",
+        "zip": "21234",
+        "country": "D",
         "contacts": [
           {
             "firstName": "Contact first name",
             "lastName": "Contact family name"
           },
           {
-            "firstName": "Another ontact first name",
-            "lastName": "Another ontact family name"
-          }
-        ]
-      }
-      summary: ""
-      description: ""
-        
-    createAccountWithoutMerchant:
-      value: {
-        "name": "My companie's name",
-        "name2": "companie's name is longer than 40 char",
-        "contacts": [
-          {
             "firstName": "Contact first name",
             "lastName": "Contact family name"
-          },
-          {
-            "firstName": "Another ontact first name",
-            "lastName": "Another ontact family name"
           }
         ]
       }
-      summary: ""
-      description: ""
 
 
-
-    createMerchantWithoutPaytype:
+    updateAccountRequest:
       value: {
+        "street": "Main Street 13"
+      }
+
+
+
+
+    createMerchantRequest:
+      value: {
+        "account": "0000321633",
         "mid": "MyMerchantID",
         "name": "My merchant's name",
+        "posSettings" : {
+          "posActive": true
+        }
       }
-      summary: ""
-      description: ""
-    createMerchantWithPaypal:
-      value: {
-        "mid": "MyMerchantID",
-        "name": "My merchant's name",
-        "paytypes": [
-          {
-            "name": "Paypal",
-            "priority": 1
-          }
-        ]
-      }
-      summary: ""
-      description: ""
-    createMerchantWithCC:
-      value: {
-        "mid": "MyMerchantID",
-        "name": "My merchant's name",
-        "paytypes": [
-          {
-            "name": "CC",
-            "priority": 1,
-            "brand": "VISA"
-          }
-        ]
-      }
-      summary: ""
-      description: ""
-    createMerchantWithPaypalAndCC:
-      value: {
-        "mid": "MyMerchantID",
-        "name": "My merchant's name",
-        "paytypes": [
-          {
-            "name": "Paypal",
-            "priority": 1
-          },
-          {
-            "name": "CC",
-            "priority": 1,
-            "brand": "VISA"
-          }
-        ]
-      }
-      summary: ""
-      description: ""
 
 
-  securitySchemes:
-    petstore_auth:
-      type: oauth2
-      flows:
-        implicit:
-          authorizationUrl: https://petstore3.swagger.io/oauth/authorize
-          scopes:
-            write:pets: modify pets in your account
-            read:pets: read your pets
-    api_key:
-      type: apiKey
-      name: api_key
-      in: header
+    updateMerchantRequest:
+      value: {
+        "name": "My merchant's name",
+        "posSettings" : {
+          "posActive": true
+        }
+      }
+
+
+    activateMerchant:
+      value: {
+        "active": true
+      }
+
+
+    updatePaytypeRequest:
+      value: {
+        "priority": 2
+      }
+
+
+    createPosTerminalRequest:
+      value: {
+        "prefix": "200",
+        "posData": {
+            "booking": true,
+            "model": "CCV Fly",
+            "language": "bg",
+            "scMenu": "Payment",
+            "merchantName": "string",
+            "dcPos3.0": true,
+            "CAT": 0,
+            "idleScreenLogoId": 0
+        }
+      }
+
+
+    updatePosTerminalRequest:
+      value: {
+        "prefix": "403",
+        "posData": {
+            "language": "de",
+        }
+      }
+
+
+    activatePosTerminalRequest:
+      description: ""
+      value: {
+        "active": true
+      }
+
+
+
+    
